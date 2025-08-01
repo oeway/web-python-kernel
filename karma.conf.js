@@ -56,6 +56,9 @@ module.exports = function (config) {
             'tests/kernel_test.ts',
             'tests/kernel_manager_test.ts',
             'tests/kernel_stream_test.ts',
+            'tests/kernel_worker_test.ts',
+            'tests/kernel_pool_test.ts',
+            'tests/kernel_interrupt_test.ts',
             // Static wheel files and schema - served but not included in browser
             { pattern: 'src/pypi/**/*.whl', watched: false, included: false, served: true },
             { pattern: 'src/pypi/**/*.json', watched: false, included: false, served: true },
@@ -75,7 +78,10 @@ module.exports = function (config) {
         preprocessors: {
             'tests/kernel_test.ts': ['webpack', 'sourcemap'],
             'tests/kernel_manager_test.ts': ['webpack', 'sourcemap'],
-            'tests/kernel_stream_test.ts': ['webpack', 'sourcemap']
+            'tests/kernel_stream_test.ts': ['webpack', 'sourcemap'],
+            'tests/kernel_worker_test.ts': ['webpack', 'sourcemap'],
+            'tests/kernel_pool_test.ts': ['webpack', 'sourcemap'],
+            'tests/kernel_interrupt_test.ts': ['webpack', 'sourcemap']
         },
 
         webpack: testWebpackConfig,
