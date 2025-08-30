@@ -526,14 +526,21 @@ async function connectToHypha() {
             window.history.replaceState({}, '', newUrl);
         }
         
-        // Connect to server
+        // Connect to Hypha server
         const connectionConfig = {
-            server_url: queryParams.server_url,
-            token: token
+            server_url: queryParams.server_url
         };
         
         if (queryParams.workspace) {
             connectionConfig.workspace = queryParams.workspace;
+        }
+        
+        if (token) {
+            connectionConfig.token = token;
+        }
+        
+        if (queryParams.client_id) {
+            connectionConfig.client_id = queryParams.client_id;
         }
         
         hyphaServer = await window.hyphaWebsocketClient.connectToServer(connectionConfig);
@@ -1261,7 +1268,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         
         // Check if we should auto-connect to Hypha
         const queryParams = getQueryParams();
-        const shouldAutoConnect = queryParams.token || queryParams.workspace || queryParams.server_url !== 'https://hypha.aicell.io';
+        const shouldAutoConnect = queryParams.token;
         
         if (shouldAutoConnect) {
             // Auto-connect to Hypha
