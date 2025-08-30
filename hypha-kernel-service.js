@@ -275,11 +275,19 @@ async function restartKernel() {
     }
 }
 
+// Track registered service info
+let registeredServiceId = null;
+let registeredServiceUrl = null;
+
 // Connect to Hypha and register service
 async function connectToHypha() {
     // Check if already connected
     if (hyphaServer) {
         addOutput('stdout', 'Already connected to Hypha server');
+        if (registeredServiceId && registeredServiceUrl) {
+            addOutput('stdout', `Service ID: ${registeredServiceId}`);
+            addOutput('stdout', `Service URL: ${registeredServiceUrl}`);
+        }
         return;
     }
     
@@ -701,7 +709,7 @@ print(f"Successfully installed: {', '.join(${JSON.stringify(packages)})}")
         const serverUrl = hyphaServer.config.server_url || getQueryParams().server_url;
         const workspace = hyphaServer.config.workspace;
         // Build the correct service URL
-        const fullServiceUrl = `${serverUrl}/${workspace}/services/${actualServiceId}/`;
+        const fullServiceUrl = `${serverUrl}/${workspace}/services/${actualServiceId}`;
         
         addOutput('result', `✓ Kernel service registered successfully`);
         addOutput('stdout', `Service ID: ${serviceId}`);
