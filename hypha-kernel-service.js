@@ -1,16 +1,23 @@
-// Import the kernel manager - use relative path for GitHub Pages compatibility
-// Will use CDN in production, local dist in development
-const kernelModuleUrl = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-    ? './dist/web-python-kernel.mjs'
-    : 'https://cdn.jsdelivr.net/npm/web-python-kernel@latest/dist/web-python-kernel.mjs';
-
-const { KernelManager, KernelMode, KernelLanguage, KernelEvents } = await import(kernelModuleUrl);
-
 // Global variables
 let kernelManager = null;
 let hyphaServer = null;
 let currentKernelId = null;
 let editor = null;
+let KernelManager, KernelMode, KernelLanguage, KernelEvents;
+
+// Load kernel module dynamically
+async function loadKernelModule() {
+    // Use relative path for GitHub Pages compatibility
+    const kernelModuleUrl = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+        ? './dist/web-python-kernel.mjs'
+        : 'https://cdn.jsdelivr.net/npm/web-python-kernel@latest/dist/web-python-kernel.mjs';
+    
+    const module = await import(kernelModuleUrl);
+    KernelManager = module.KernelManager;
+    KernelMode = module.KernelMode;
+    KernelLanguage = module.KernelLanguage;
+    KernelEvents = module.KernelEvents;
+}
 
 // Parse URL query parameters for Hypha connection
 function getQueryParams() {
@@ -715,52 +722,61 @@ print(f"Successfully installed: {', '.join(${JSON.stringify(packages)})}")
 
 // Initialize everything when DOM is ready
 document.addEventListener('DOMContentLoaded', async () => {
-    // Initialize CodeMirror
-    initializeEditor();
-    
-    // Set up button event listeners
-    document.getElementById('initBtn').addEventListener('click', createKernel);
-    document.getElementById('runBtn').addEventListener('click', runCode);
-    document.getElementById('interruptBtn').addEventListener('click', interruptKernel);
-    document.getElementById('restartBtn').addEventListener('click', restartKernel);
-    document.getElementById('clearBtn').addEventListener('click', clearOutput);
-    document.getElementById('connectBtn').addEventListener('click', connectToHypha);
-    
-    // Handle kernel mode change - automatically restart if kernel exists
-    document.getElementById('kernelMode').addEventListener('change', async (e) => {
-        if (currentKernelId) {
-            addOutput('stdout', `Switching to ${e.target.value} mode...`);
-            await restartKernel();
-        }
-    });
-    
-    // Run code on Ctrl+Enter
-    editor.on('keydown', (cm, event) => {
-        if (event.ctrlKey && event.key === 'Enter') {
-            event.preventDefault();
-            if (!document.getElementById('runBtn').disabled) {
-                runCode();
+    try {
+        // Load kernel module first
+        await loadKernelModule();
+        
+        // Initialize CodeMirror
+        initializeEditor();
+        
+        // Set up button event listeners
+        document.getElementById('initBtn').addEventListener('click', createKernel);
+        document.getElementById('runBtn').addEventListener('click', runCode);
+        document.getElementById('interruptBtn').addEventListener('click', interruptKernel);
+        document.getElementById('restartBtn').addEventListener('click', restartKernel);
+        document.getElementById('clearBtn').addEventListener('click', clearOutput);
+        document.getElementById('connectBtn').addEventListener('click', connectToHypha);
+        
+        // Handle kernel mode change - automatically restart if kernel exists
+        document.getElementById('kernelMode').addEventListener('change', async (e) => {
+            if (currentKernelId) {
+                addOutput('stdout', `Switching to ${e.target.value} mode...`);
+                await restartKernel();
             }
+        });
+        
+        // Run code on Ctrl+Enter
+        editor.on('keydown', (cm, event) => {
+            if (event.ctrlKey && event.key === 'Enter') {
+                event.preventDefault();
+                if (!document.getElementById('runBtn').disabled) {
+                    runCode();
+                }
+            }
+        });
+        
+        // Always initialize the kernel manager (but not a kernel)
+        addOutput('stdout', 'Initializing kernel manager...');
+        await initializeKernelManager();
+        
+        // Check if we should auto-connect to Hypha
+        const queryParams = getQueryParams();
+        const shouldAutoConnect = queryParams.token || queryParams.workspace || queryParams.server_url !== 'https://hypha.aicell.io';
+        
+        if (shouldAutoConnect) {
+            // Auto-connect to Hypha
+            addOutput('stdout', 'Auto-connecting to Hypha with URL parameters...');
+            addOutput('stdout', `Server: ${queryParams.server_url}`);
+            if (queryParams.workspace) addOutput('stdout', `Workspace: ${queryParams.workspace}`);
+            await connectToHypha();
+        } else {
+            addOutput('stdout', 'Ready to connect. Click "Connect to Hypha" to register the service.');
+            addOutput('stdout', 'URL parameters supported: server_url, workspace, token, client_id');
         }
-    });
-    
-    // Always initialize the kernel manager (but not a kernel)
-    addOutput('stdout', 'Initializing kernel manager...');
-    await initializeKernelManager();
-    
-    // Check if we should auto-connect to Hypha
-    const queryParams = getQueryParams();
-    const shouldAutoConnect = queryParams.token || queryParams.workspace || queryParams.server_url !== 'https://hypha.aicell.io';
-    
-    if (shouldAutoConnect) {
-        // Auto-connect to Hypha
-        addOutput('stdout', 'Auto-connecting to Hypha with URL parameters...');
-        addOutput('stdout', `Server: ${queryParams.server_url}`);
-        if (queryParams.workspace) addOutput('stdout', `Workspace: ${queryParams.workspace}`);
-        await connectToHypha();
-    } else {
-        addOutput('stdout', 'Ready to connect. Click "Connect to Hypha" to register the service.');
-        addOutput('stdout', 'URL parameters supported: server_url, workspace, token, client_id');
+        
+    } catch (error) {
+        console.error('Initialization error:', error);
+        addOutput('error', `Failed to initialize: ${error.message}`);
     }
 });
 
