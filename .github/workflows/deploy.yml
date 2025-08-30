@@ -53,8 +53,32 @@ jobs:
           # Copy pypi wheels
           cp -r pypi static-site/ || true
           
-          # Create a simple 404 page
-          echo '<!DOCTYPE html><html><head><meta http-equiv="refresh" content="0;url=/index.html"></head></html>' > static-site/404.html
+          # Create .nojekyll file to prevent GitHub Pages from processing files
+          touch static-site/.nojekyll
+          
+          # Get repository name for base path
+          REPO_NAME="${GITHUB_REPOSITORY#*/}"
+          
+          # Create a 404 page that redirects to the correct base path
+          cat > static-site/404.html << EOF
+          <!DOCTYPE html>
+          <html>
+          <head>
+              <meta charset="UTF-8">
+              <title>Redirecting...</title>
+              <script>
+                  // Get the base path from the current URL
+                  const pathParts = window.location.pathname.split('/');
+                  const basePath = pathParts[1] ? '/' + pathParts[1] : '';
+                  // Redirect to the base index.html
+                  window.location.href = basePath + '/index.html';
+              </script>
+          </head>
+          <body>
+              <p>Redirecting to the main page...</p>
+          </body>
+          </html>
+          EOF
 
       - name: Setup Pages
         uses: actions/configure-pages@v4

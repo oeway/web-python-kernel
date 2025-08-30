@@ -1,5 +1,10 @@
-// Import the kernel manager from CDN
-import { KernelManager, KernelMode, KernelLanguage, KernelEvents } from 'https://cdn.jsdelivr.net/npm/web-python-kernel@latest/dist/web-python-kernel.mjs';
+// Import the kernel manager - use relative path for GitHub Pages compatibility
+// Will use CDN in production, local dist in development
+const kernelModuleUrl = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+    ? './dist/web-python-kernel.mjs'
+    : 'https://cdn.jsdelivr.net/npm/web-python-kernel@latest/dist/web-python-kernel.mjs';
+
+const { KernelManager, KernelMode, KernelLanguage, KernelEvents } = await import(kernelModuleUrl);
 
 // Global variables
 let kernelManager = null;

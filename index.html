@@ -5,6 +5,20 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Python Kernel - Hypha Service</title>
     
+    <!-- Set base URL for GitHub Pages compatibility -->
+    <script>
+        // Dynamically set base tag for GitHub Pages
+        if (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+            const pathParts = window.location.pathname.split('/');
+            // Check if we're in a subdirectory (GitHub Pages)
+            if (pathParts.length > 2 && pathParts[1]) {
+                const base = document.createElement('base');
+                base.href = `/${pathParts[1]}/`;
+                document.head.appendChild(base);
+            }
+        }
+    </script>
+    
     <!-- CodeMirror for code editing -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.12/codemirror.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.12/codemirror.min.css">
@@ -306,7 +320,7 @@ print("Plot generated successfully!")</textarea>
         </div>
     </div>
     
-    <!-- Load the kernel manager module -->
-    <script type="module" src="hypha-kernel-service.js"></script>
+    <!-- Load the kernel manager module with relative path -->
+    <script type="module" src="./hypha-kernel-service.js"></script>
 </body>
 </html>
