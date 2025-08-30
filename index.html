@@ -253,12 +253,45 @@
             border-radius: 4px;
             font-size: 13px;
         }
+        
+        #kernelSelect {
+            background: #2d2d30;
+            border: 1px solid #0e639c;
+        }
+        
+        #kernelSelect:empty, #kernelSelect option[value=""] {
+            color: #8b8b8b;
+        }
+        
+        button[title] {
+            position: relative;
+        }
+        
+        button[title]:hover::after {
+            content: attr(title);
+            position: absolute;
+            bottom: -25px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #252526;
+            color: #cccccc;
+            padding: 4px 8px;
+            border-radius: 3px;
+            font-size: 11px;
+            white-space: nowrap;
+            z-index: 1000;
+            pointer-events: none;
+        }
     </style>
 </head>
 <body>
     <div class="header">
         <h1>🐍 Python Kernel Service</h1>
         <div class="header-controls">
+            <div class="status">
+                <span class="status-dot" id="statusDot"></span>
+                <span id="statusText">Not Connected</span>
+            </div>
             <div class="kernel-selector">
                 <label for="kernelMode" style="font-size: 13px;">Mode:</label>
                 <select id="kernelMode">
@@ -266,11 +299,7 @@
                     <option value="main_thread">Main Thread</option>
                 </select>
             </div>
-            <div class="status">
-                <span class="status-dot" id="statusDot"></span>
-                <span id="statusText">Not Connected</span>
-            </div>
-            <button id="initBtn">Initialize Kernel</button>
+            <button id="initBtn">+ New Kernel</button>
             <button id="connectBtn" class="secondary">Connect to Hypha</button>
         </div>
     </div>
@@ -280,9 +309,14 @@
             <div class="editor-header">
                 <span class="editor-title">Python Code</span>
                 <div class="editor-actions">
+                    <select id="kernelSelect" style="min-width: 150px;">
+                        <option value="">No Kernel</option>
+                    </select>
+                    <button id="refreshKernelsBtn" class="secondary" title="Refresh kernel list">↻</button>
                     <button id="runBtn" disabled>▶ Run</button>
                     <button id="interruptBtn" class="danger" disabled>■ Interrupt</button>
                     <button id="restartBtn" class="secondary" disabled>↻ Restart</button>
+                    <button id="deleteKernelBtn" class="danger" disabled title="Delete selected kernel">🗑</button>
                 </div>
             </div>
             <textarea id="codeEditor"># Welcome to Web Python Kernel!

@@ -44,15 +44,24 @@ function updateStatus(status, text) {
 }
 
 // Add output to the output panel
+// Helper to strip ANSI escape codes
+function stripAnsi(text) {
+    // Remove ANSI escape codes (color codes, cursor movement, etc.)
+    return text.replace(/\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])/g, '');
+}
+
 function addOutput(type, content, isHtml = false) {
     const output = document.getElementById('output');
     const line = document.createElement('div');
     line.className = `output-line output-${type}`;
     
+    // Strip ANSI codes from content
+    const cleanContent = stripAnsi(content);
+    
     if (isHtml) {
-        line.innerHTML = content;
+        line.innerHTML = cleanContent;
     } else {
-        line.textContent = content;
+        line.textContent = cleanContent;
     }
     
     output.appendChild(line);
@@ -108,7 +117,7 @@ async function initializeKernelManager() {
         
         updateStatus('ready', 'Manager ready');
         addOutput('result', '✓ Kernel manager initialized');
-        addOutput('stdout', 'Click "Initialize Kernel" to create a Python kernel');
+        addOutput('stdout', 'Click "New Kernel" to create a new Python kernel, or select an existing kernel from the dropdown');
         
     } catch (error) {
         updateStatus('error', 'Manager initialization failed');
@@ -150,12 +159,12 @@ async function createKernel() {
         
         updateStatus('ready', 'Kernel ready');
         
-        // Enable buttons
-        document.getElementById('runBtn').disabled = false;
-        document.getElementById('restartBtn').disabled = false;
-        document.getElementById('initBtn').disabled = true;
+        // Update kernel list and select the new kernel
+        await updateKernelList();
+        document.getElementById('kernelSelect').value = currentKernelId;
+        updateButtonStates();
         
-        addOutput('result', '✓ Kernel created successfully');
+        addOutput('result', `✓ Kernel created successfully: ${currentKernelId.substring(0, 8)}...`);
         
     } catch (error) {
         updateStatus('error', 'Kernel creation failed');
@@ -167,17 +176,34 @@ async function createKernel() {
 // Run Python code
 async function runCode() {
     if (!kernelManager || !currentKernelId) {
-        addOutput('error', 'Kernel not initialized');
+        addOutput('error', 'No kernel selected. Please select or create a kernel first.');
         return;
     }
     
     const code = editor.getValue();
-    clearOutput();
+    if (!code.trim()) {
+        addOutput('error', 'No code to execute');
+        return;
+    }
+    
+    // Don't clear output - append to existing logs
+    addOutput('stdout', `\n--- Executing in kernel: ${currentKernelId.substring(0, 8)} ---`);
     
     try {
+        // Check if kernel exists
+        const kernel = kernelManager.getKernel(currentKernelId);
+        if (!kernel) {
+            addOutput('error', `Kernel ${currentKernelId} not found. It may have been destroyed.`);
+            await updateKernelList();
+            return;
+        }
+        
         const stream = kernelManager.executeStream(currentKernelId, code);
+        let hasError = false;
         
         for await (const event of stream) {
+            console.log('Execution event:', event); // Debug log
+            
             switch (event.type) {
                 case 'stream':
                     if (event.data.name === 'stdout') {
@@ -188,34 +214,60 @@ async function runCode() {
                     break;
                     
                 case 'execute_result':
-                    addOutput('result', event.data.data['text/plain']);
+                    if (event.data && event.data.data) {
+                        addOutput('result', event.data.data['text/plain'] || JSON.stringify(event.data.data));
+                    }
                     break;
                     
                 case 'display_data':
-                    if (event.data.data['image/png']) {
-                        const img = document.createElement('img');
-                        img.className = 'output-image';
-                        img.src = `data:image/png;base64,${event.data.data['image/png']}`;
-                        document.getElementById('output').appendChild(img);
-                    } else if (event.data.data['text/html']) {
-                        addOutput('result', event.data.data['text/html'], true);
-                    } else if (event.data.data['text/plain']) {
-                        addOutput('result', event.data.data['text/plain']);
+                    if (event.data && event.data.data) {
+                        if (event.data.data['image/png']) {
+                            const img = document.createElement('img');
+                            img.className = 'output-image';
+                            img.src = `data:image/png;base64,${event.data.data['image/png']}`;
+                            document.getElementById('output').appendChild(img);
+                        } else if (event.data.data['text/html']) {
+                            addOutput('result', event.data.data['text/html'], true);
+                        } else if (event.data.data['text/plain']) {
+                            addOutput('result', event.data.data['text/plain']);
+                        }
                     }
                     break;
                     
                 case 'error':
-                    addOutput('error', `${event.data.ename}: ${event.data.evalue}`);
-                    if (event.data.traceback) {
-                        event.data.traceback.forEach(line => {
-                            addOutput('stderr', line);
-                        });
+                case 'execute_error':  // Handle both error types
+                    hasError = true;
+                    if (event.data) {
+                        const errorMsg = `${event.data.ename || 'Error'}: ${event.data.evalue || 'Unknown error'}`;
+                        addOutput('error', errorMsg);
+                        
+                        if (event.data.traceback && Array.isArray(event.data.traceback)) {
+                            event.data.traceback.forEach(line => {
+                                addOutput('stderr', line);
+                            });
+                        }
+                    } else {
+                        addOutput('error', 'Execution failed with unknown error');
                     }
                     break;
+                    
+                default:
+                    console.log('Unknown event type:', event.type, event);
             }
         }
+        
+        if (!hasError) {
+            addOutput('stdout', '✓ Execution completed');
+        }
+        
     } catch (error) {
-        addOutput('error', `Execution error: ${error.message}`);
+        console.error('Execution error:', error);
+        addOutput('error', `Execution failed: ${error.message || error}`);
+        
+        // If kernel doesn't exist, update the list
+        if (error.message && error.message.includes('not found')) {
+            await updateKernelList();
+        }
     }
 }
 
@@ -242,13 +294,16 @@ async function restartKernel() {
     updateStatus('busy', 'Restarting kernel...');
     
     try {
+        // Get current kernel mode
+        const kernel = kernelManager.getKernel(currentKernelId);
+        const currentMode = kernel ? kernel.mode : KernelMode.WORKER;
+        
         // Destroy current kernel
         await kernelManager.destroyKernel(currentKernelId);
         
-        // Create new kernel
-        const mode = document.getElementById('kernelMode').value;
+        // Create new kernel with same mode
         currentKernelId = await kernelManager.createKernel({
-            mode: mode === 'worker' ? KernelMode.WORKER : KernelMode.MAIN_THREAD,
+            mode: currentMode,
             lang: KernelLanguage.PYTHON
         });
         
@@ -267,7 +322,13 @@ async function restartKernel() {
         
         updateStatus('ready', 'Kernel ready');
         clearOutput();
-        addOutput('result', '✓ Kernel restarted successfully');
+        
+        // Update kernel list and select the new kernel
+        await updateKernelList();
+        document.getElementById('kernelSelect').value = currentKernelId;
+        updateButtonStates();
+        
+        addOutput('result', `✓ Kernel restarted successfully: ${currentKernelId.substring(0, 8)}...`);
         
     } catch (error) {
         updateStatus('error', 'Restart failed');
@@ -275,9 +336,94 @@ async function restartKernel() {
     }
 }
 
+// Delete selected kernel
+async function deleteKernel() {
+    if (!kernelManager || !currentKernelId) return;
+    
+    const kernelId = currentKernelId;
+    updateStatus('busy', 'Deleting kernel...');
+    
+    try {
+        await kernelManager.destroyKernel(kernelId);
+        
+        // Clear current kernel ID
+        currentKernelId = null;
+        
+        // Update kernel list
+        await updateKernelList();
+        
+        updateStatus('ready', 'Kernel deleted');
+        addOutput('result', `✓ Kernel deleted: ${kernelId.substring(0, 8)}...`);
+        
+    } catch (error) {
+        updateStatus('error', 'Delete failed');
+        addOutput('error', `Delete error: ${error.message}`);
+    }
+}
+
 // Track registered service info
 let registeredServiceId = null;
 let registeredServiceUrl = null;
+
+// Update kernel selector dropdown
+async function updateKernelList() {
+    const select = document.getElementById('kernelSelect');
+    if (!kernelManager) {
+        select.innerHTML = '<option value="">No Kernel Manager</option>';
+        return;
+    }
+    
+    try {
+        const kernels = await kernelManager.listKernels();
+        const currentValue = select.value;
+        
+        // Clear and rebuild options
+        select.innerHTML = '<option value="">No Kernel</option>';
+        
+        if (kernels && kernels.length > 0) {
+            kernels.forEach(kernel => {
+                const option = document.createElement('option');
+                option.value = kernel.id;
+                option.textContent = `${kernel.id.substring(0, 8)}... (${kernel.mode})`;
+                select.appendChild(option);
+            });
+            
+            // Restore previous selection if it still exists
+            if (currentValue && kernels.some(k => k.id === currentValue)) {
+                select.value = currentValue;
+            } else if (currentKernelId && kernels.some(k => k.id === currentKernelId)) {
+                select.value = currentKernelId;
+            }
+        }
+        
+        // Update button states based on selection
+        updateButtonStates();
+        
+    } catch (error) {
+        console.error('Failed to update kernel list:', error);
+        select.innerHTML = '<option value="">Error loading kernels</option>';
+    }
+}
+
+// Update button states based on selected kernel
+function updateButtonStates() {
+    const select = document.getElementById('kernelSelect');
+    const selectedKernelId = select.value;
+    
+    document.getElementById('runBtn').disabled = !selectedKernelId;
+    document.getElementById('interruptBtn').disabled = !selectedKernelId;
+    document.getElementById('restartBtn').disabled = !selectedKernelId;
+    document.getElementById('deleteKernelBtn').disabled = !selectedKernelId;
+    
+    // Update current kernel ID
+    currentKernelId = selectedKernelId || null;
+    
+    if (selectedKernelId) {
+        updateStatus('ready', 'Kernel selected');
+    } else {
+        updateStatus('ready', 'No kernel selected');
+    }
+}
 
 // Parse JWT token to check expiration
 function parseJWT(token) {
@@ -1079,13 +1225,21 @@ document.addEventListener('DOMContentLoaded', async () => {
         document.getElementById('restartBtn').addEventListener('click', restartKernel);
         document.getElementById('clearBtn').addEventListener('click', clearOutput);
         document.getElementById('connectBtn').addEventListener('click', connectToHypha);
+        document.getElementById('deleteKernelBtn').addEventListener('click', deleteKernel);
+        document.getElementById('refreshKernelsBtn').addEventListener('click', updateKernelList);
         
-        // Handle kernel mode change - automatically restart if kernel exists
-        document.getElementById('kernelMode').addEventListener('change', async (e) => {
+        // Handle kernel selection change
+        document.getElementById('kernelSelect').addEventListener('change', (e) => {
+            currentKernelId = e.target.value || null;
+            updateButtonStates();
             if (currentKernelId) {
-                addOutput('stdout', `Switching to ${e.target.value} mode...`);
-                await restartKernel();
+                addOutput('stdout', `Selected kernel: ${currentKernelId.substring(0, 8)}...`);
             }
+        });
+        
+        // Handle kernel mode change - create new kernel with new mode
+        document.getElementById('kernelMode').addEventListener('change', async (e) => {
+            addOutput('stdout', `Mode changed to ${e.target.value}. Click "New Kernel" to create a new kernel with this mode.`);
         });
         
         // Run code on Ctrl+Enter
@@ -1101,6 +1255,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         // Always initialize the kernel manager (but not a kernel)
         addOutput('stdout', 'Initializing kernel manager...');
         await initializeKernelManager();
+        
+        // Load initial kernel list
+        await updateKernelList();
         
         // Check if we should auto-connect to Hypha
         const queryParams = getQueryParams();
