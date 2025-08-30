@@ -955,8 +955,8 @@ async function registerKernelService() {
         // Service API implementation with worker interface
         const service = await hyphaServer.registerService({
             type: 'server-app-worker',
-            id: 'python-kernel-worker',
-            name: 'Python Kernel Worker',
+            id: 'web-python-kernel-worker',
+            name: 'Web Python Kernel Worker',
             description: 'Web-based Python kernel worker. Provides a full Python 3.11 environment running in the browser via Pyodide/WebAssembly. Supports scientific computing with numpy, matplotlib, pandas, and can install additional pure Python packages. Ideal for data analysis, education, and interactive Python execution without server infrastructure.',
             supported_types: ['web-python-kernel'],
             config: {
