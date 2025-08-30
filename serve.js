@@ -59,9 +59,9 @@ const server = http.createServer((req, res) => {
     return
   }
 
-  // Default to playground.html for root
+  // Default to index.html for root
   if (pathname === '/') {
-    pathname = '/playground.html';
+    pathname = '/index.html';
   }
 
   
@@ -143,9 +143,11 @@ const server = http.createServer((req, res) => {
 server.listen(PORT, () => {
   console.log(`🚀 Development server running at:`);
   console.log(`   Local:   http://localhost:${PORT}/`);
+  console.log(`   Hypha Service: http://localhost:${PORT}/index.html`);
   console.log(`   Playground: http://localhost:${PORT}/playground.html`);
   console.log('');
   console.log('📝 Features:');
+  console.log('   - Python Kernel Hypha Worker Service');
   console.log('   - Full web-python-kernel with visualization support');
   console.log('   - Matplotlib, Plotly, Seaborn plotting capabilities');
   console.log('   - Automatic display_data rendering for plots');

@@ -104,14 +104,19 @@ module.exports = (env, argv) => {
     devServer: {
       static: {
         directory: path.join(__dirname, '.'),
+        publicPath: '/',
       },
       port: 8080,
       hot: true,
       open: true,
-      openPage: 'playground.html',
+      openPage: 'index.html',
       compress: true,
       historyApiFallback: {
-        index: '/playground.html'
+        index: '/index.html',
+        rewrites: [
+          { from: /^\/playground/, to: '/playground.html' },
+          { from: /./, to: '/index.html' }
+        ]
       },
       client: {
         overlay: {
@@ -123,6 +128,9 @@ module.exports = (env, argv) => {
         'Access-Control-Allow-Origin': '*',
         'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, PATCH, OPTIONS',
         'Access-Control-Allow-Headers': 'X-Requested-With, content-type, Authorization',
+        // Headers for SharedArrayBuffer support (needed for better interrupts)
+        'Cross-Origin-Opener-Policy': 'same-origin',
+        'Cross-Origin-Embedder-Policy': 'require-corp',
       },
     },
     

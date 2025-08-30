@@ -1,6 +1,6 @@
 {
   "name": "web-python-kernel",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "A web-based Python kernel for browser environments with TypeScript support",
   "main": "dist/web-python-kernel.js",
   "module": "dist/web-python-kernel.mjs",
@@ -31,7 +31,7 @@
     "clean": "rm -rf dist pypi web-python-kernel.js web-python-kernel.mjs .webpack-cache",
     "rebuild": "npm run clean && npm run build:dev",
     "prepare": "npm run build",
-    "publish-npm": "npm run build && npm publish"
+    "publish-npm": "npm run build:all && npm publish"
   },
   "keywords": [
     "python",
