@@ -270,6 +270,12 @@ async function restartKernel() {
 
 // Connect to Hypha and register service
 async function connectToHypha() {
+    // Check if already connected
+    if (hyphaServer) {
+        addOutput('stdout', 'Already connected to Hypha server');
+        return;
+    }
+    
     // Ensure kernel manager is initialized
     if (!kernelManager) {
         addOutput('error', 'Kernel manager not initialized');
@@ -279,19 +285,20 @@ async function connectToHypha() {
     const queryParams = getQueryParams();
     
     updateStatus('busy', 'Connecting to Hypha...');
-    addOutput('stdout', 'Loading Hypha RPC client...');
     
     try {
-        // Load Hypha RPC client
-        const script = document.createElement('script');
-        script.src = 'https://cdn.jsdelivr.net/npm/hypha-rpc@0.20.66/dist/hypha-rpc-websocket.min.js';
-        await new Promise((resolve, reject) => {
-            script.onload = resolve;
-            script.onerror = reject;
-            document.head.appendChild(script);
-        });
-        
-        addOutput('stdout', '✓ Hypha RPC client loaded');
+        // Load Hypha RPC client if not already loaded
+        if (!window.hyphaWebsocketClient) {
+            addOutput('stdout', 'Loading Hypha RPC client...');
+            const script = document.createElement('script');
+            script.src = 'https://cdn.jsdelivr.net/npm/hypha-rpc@0.20.66/dist/hypha-rpc-websocket.min.js';
+            await new Promise((resolve, reject) => {
+                script.onload = resolve;
+                script.onerror = reject;
+                document.head.appendChild(script);
+            });
+            addOutput('stdout', '✓ Hypha RPC client loaded');
+        }
         
         // Handle authentication
         let token = queryParams.token;
@@ -678,7 +685,16 @@ print(f"Successfully installed: {', '.join(${JSON.stringify(packages)})}")
         
         // Extract service details and build full URL
         const serviceId = service.id;
-        const fullServiceUrl = `${hyphaServer.config.server_url}/${hyphaServer.config.workspace}/services/${serviceId}/`;
+        // The service.id might include workspace prefix, so we need to extract just the service part
+        // Format is typically "workspace/client_id:service_name" or just "client_id:service_name"
+        const serviceIdParts = serviceId.split('/');
+        const actualServiceId = serviceIdParts.length > 1 ? serviceIdParts[serviceIdParts.length - 1] : serviceId;
+        
+        // Use the server URL from query params or the one stored during connection
+        const serverUrl = hyphaServer.config.server_url || getQueryParams().server_url;
+        const workspace = hyphaServer.config.workspace;
+        // Build the correct service URL
+        const fullServiceUrl = `${serverUrl}/${workspace}/services/${actualServiceId}/`;
         
         addOutput('result', `✓ Kernel service registered successfully`);
         addOutput('stdout', `Service ID: ${serviceId}`);
