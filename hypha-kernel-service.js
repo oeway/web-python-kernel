@@ -700,16 +700,29 @@ print(f"Successfully installed: {', '.join(${JSON.stringify(packages)})}")
         
         // Extract service details and build full URL
         const serviceId = service.id;
-        // The service.id might include workspace prefix, so we need to extract just the service part
-        // Format is typically "workspace/client_id:service_name" or just "client_id:service_name"
-        const serviceIdParts = serviceId.split('/');
-        const actualServiceId = serviceIdParts.length > 1 ? serviceIdParts[serviceIdParts.length - 1] : serviceId;
+        // The service.id format is "workspace/client_id:service_name"
+        // We need to extract just "client_id:service_name"
+        let actualServiceId = serviceId;
         
-        // Use the server URL from query params or the one stored during connection
-        const serverUrl = hyphaServer.config.server_url || getQueryParams().server_url;
+        // Check if serviceId contains workspace prefix
         const workspace = hyphaServer.config.workspace;
-        // Build the correct service URL
+        if (serviceId.startsWith(workspace + '/')) {
+            actualServiceId = serviceId.substring(workspace.length + 1);
+        } else if (serviceId.includes('/')) {
+            // If it has a slash but doesn't start with our workspace, take the part after the slash
+            const parts = serviceId.split('/');
+            actualServiceId = parts[parts.length - 1];
+        }
+        
+        // Get the server URL - it might not be in config, so use query params or connection info
+        const queryParams = getQueryParams();
+        const serverUrl = queryParams.server_url || hyphaServer.config.server_url || 'https://hypha.aicell.io';
+        // Build the correct service URL without trailing slash
         const fullServiceUrl = `${serverUrl}/${workspace}/services/${actualServiceId}`;
+        
+        // Store the service info for later reference
+        registeredServiceId = serviceId;
+        registeredServiceUrl = fullServiceUrl;
         
         addOutput('result', `✓ Kernel service registered successfully`);
         addOutput('stdout', `Service ID: ${serviceId}`);
