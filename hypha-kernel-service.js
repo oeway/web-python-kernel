@@ -403,12 +403,393 @@ async function registerKernelService() {
             }
         }
         
+        // Define schemas for all service functions
+        const schemas = {
+            start: {
+                name: "start",
+                description: "Start a new Python kernel session. Creates an isolated Python environment that can execute code and maintain state between executions.",
+                parameters: {
+                    type: "object",
+                    properties: {
+                        config: {
+                            type: "object",
+                            description: "Configuration options for the kernel session",
+                            properties: {
+                                mode: {
+                                    type: "string",
+                                    enum: ["worker", "main_thread"],
+                                    description: "Execution mode: 'worker' runs in Web Worker (recommended), 'main_thread' runs in main browser thread"
+                                },
+                                startup_script: {
+                                    type: "string",
+                                    description: "Python code to execute when the kernel starts (e.g., import statements, initial setup)"
+                                },
+                                env: {
+                                    type: "object",
+                                    description: "Environment variables to set in the Python kernel",
+                                    additionalProperties: { type: "string" }
+                                }
+                            }
+                        },
+                        context: {
+                            type: "object",
+                            description: "Optional context information from the caller",
+                            nullable: true
+                        }
+                    },
+                    required: []
+                }
+            },
+            stop: {
+                name: "stop",
+                description: "Stop and cleanup a running Python kernel session. Frees all resources associated with the session.",
+                parameters: {
+                    type: "object",
+                    properties: {
+                        sessionId: {
+                            type: "string",
+                            description: "The unique identifier of the session to stop (returned from start)"
+                        },
+                        context: {
+                            type: "object",
+                            description: "Optional context information from the caller",
+                            nullable: true
+                        }
+                    },
+                    required: ["sessionId"]
+                }
+            },
+            get_logs: {
+                name: "get_logs",
+                description: "Retrieve execution logs from a kernel session. Useful for debugging and monitoring session activity.",
+                parameters: {
+                    type: "object",
+                    properties: {
+                        sessionId: {
+                            type: "string",
+                            description: "The unique identifier of the session"
+                        },
+                        type: {
+                            type: "string",
+                            enum: ["info", "error", "warning", null],
+                            description: "Filter logs by type. If null, returns all log types",
+                            nullable: true
+                        },
+                        offset: {
+                            type: "number",
+                            description: "Starting index for log retrieval (for pagination)",
+                            default: 0
+                        },
+                        limit: {
+                            type: "number",
+                            description: "Maximum number of log entries to return",
+                            nullable: true
+                        },
+                        context: {
+                            type: "object",
+                            description: "Optional context information from the caller",
+                            nullable: true
+                        }
+                    },
+                    required: ["sessionId"]
+                }
+            },
+            execute: {
+                name: "execute",
+                description: "Execute Python code in a session and return all outputs. Supports numpy, matplotlib, pandas, and other scientific libraries.",
+                parameters: {
+                    type: "object",
+                    properties: {
+                        sessionId: {
+                            type: "string",
+                            description: "The unique identifier of the session where code will be executed"
+                        },
+                        script: {
+                            type: "string",
+                            description: "Python code to execute. Can include imports, function definitions, and any valid Python statements"
+                        },
+                        config: {
+                            type: "object",
+                            description: "Execution configuration options",
+                            properties: {
+                                timeout: {
+                                    type: "number",
+                                    description: "Maximum execution time in milliseconds"
+                                }
+                            }
+                        },
+                        progress_callback: {
+                            type: "function",
+                            description: "Optional callback function to receive real-time execution progress",
+                            nullable: true
+                        },
+                        context: {
+                            type: "object",
+                            description: "Optional context information from the caller",
+                            nullable: true
+                        }
+                    },
+                    required: ["sessionId", "script"]
+                }
+            },
+            createKernel: {
+                name: "createKernel",
+                description: "Create a new Python kernel instance without starting a session. Lower-level API for direct kernel management.",
+                parameters: {
+                    type: "object",
+                    properties: {
+                        options: {
+                            type: "object",
+                            description: "Kernel creation options",
+                            properties: {
+                                mode: {
+                                    type: "string",
+                                    enum: ["worker", "main_thread"],
+                                    description: "Execution mode for the kernel",
+                                    default: "worker"
+                                },
+                                namespace: {
+                                    type: "string",
+                                    description: "Optional namespace to group related kernels"
+                                }
+                            }
+                        }
+                    },
+                    required: []
+                }
+            },
+            destroyKernel: {
+                name: "destroyKernel",
+                description: "Destroy a specific kernel instance and free its resources.",
+                parameters: {
+                    type: "object",
+                    properties: {
+                        kernelId: {
+                            type: "string",
+                            description: "The unique identifier of the kernel to destroy"
+                        }
+                    },
+                    required: ["kernelId"]
+                }
+            },
+            executeStream: {
+                name: "executeStream",
+                description: "Execute Python code and stream outputs in real-time. Returns an async generator that yields execution events as they occur.",
+                parameters: {
+                    type: "object",
+                    properties: {
+                        kernelId: {
+                            type: "string",
+                            description: "The unique identifier of the kernel"
+                        },
+                        code: {
+                            type: "string",
+                            description: "Python code to execute"
+                        }
+                    },
+                    required: ["kernelId", "code"]
+                }
+            },
+            interruptKernel: {
+                name: "interruptKernel",
+                description: "Interrupt a running execution in a kernel. Useful for stopping long-running or infinite loops.",
+                parameters: {
+                    type: "object",
+                    properties: {
+                        kernelId: {
+                            type: "string",
+                            description: "The unique identifier of the kernel to interrupt"
+                        }
+                    },
+                    required: ["kernelId"]
+                }
+            },
+            installPackages: {
+                name: "installPackages",
+                description: "Install Python packages in a kernel using micropip. Supports pure Python packages from PyPI.",
+                parameters: {
+                    type: "object",
+                    properties: {
+                        kernelId: {
+                            type: "string",
+                            description: "The unique identifier of the kernel"
+                        },
+                        packages: {
+                            type: "array",
+                            items: { type: "string" },
+                            description: "List of package names to install (e.g., ['pandas', 'scikit-learn'])"
+                        }
+                    },
+                    required: ["kernelId", "packages"]
+                }
+            },
+            listKernels: {
+                name: "listKernels",
+                description: "List all active kernels, optionally filtered by namespace. Useful for managing multiple kernel instances.",
+                parameters: {
+                    type: "object",
+                    properties: {
+                        namespace: {
+                            type: "string",
+                            description: "Optional namespace to filter kernels. If null, returns all kernels",
+                            nullable: true
+                        }
+                    },
+                    required: []
+                }
+            },
+            executeWithOutput: {
+                name: "executeWithOutput",
+                description: "Execute Python code and collect all outputs into a single response. Useful when you need all outputs at once rather than streaming.",
+                parameters: {
+                    type: "object",
+                    properties: {
+                        kernelId: {
+                            type: "string",
+                            description: "The unique identifier of the kernel"
+                        },
+                        code: {
+                            type: "string",
+                            description: "Python code to execute"
+                        }
+                    },
+                    required: ["kernelId", "code"]
+                }
+            },
+            restartKernel: {
+                name: "restartKernel",
+                description: "Restart a kernel by destroying and recreating it. Clears all variables and state while maintaining the same configuration.",
+                parameters: {
+                    type: "object",
+                    properties: {
+                        kernelId: {
+                            type: "string",
+                            description: "The unique identifier of the kernel to restart"
+                        }
+                    },
+                    required: ["kernelId"]
+                }
+            },
+            getKernelStatus: {
+                name: "getKernelStatus",
+                description: "Get the current status and configuration of a kernel.",
+                parameters: {
+                    type: "object",
+                    properties: {
+                        kernelId: {
+                            type: "string",
+                            description: "The unique identifier of the kernel"
+                        }
+                    },
+                    required: ["kernelId"]
+                }
+            },
+            getPoolStats: {
+                name: "getPoolStats",
+                description: "Get statistics about the kernel pool, including available and in-use kernels.",
+                parameters: {
+                    type: "object",
+                    properties: {},
+                    required: []
+                }
+            },
+            runStartupScript: {
+                name: "runStartupScript",
+                description: "Execute a startup script in a kernel. Typically used to import libraries or set up initial state.",
+                parameters: {
+                    type: "object",
+                    properties: {
+                        kernelId: {
+                            type: "string",
+                            description: "The unique identifier of the kernel"
+                        },
+                        script: {
+                            type: "string",
+                            description: "Python startup script to execute (e.g., imports, function definitions)"
+                        }
+                    },
+                    required: ["kernelId", "script"]
+                }
+            },
+            getServiceInfo: {
+                name: "getServiceInfo",
+                description: "Get information about the kernel service, including version, features, and active kernels.",
+                parameters: {
+                    type: "object",
+                    properties: {},
+                    required: []
+                }
+            },
+            executeDirect: {
+                name: "execute",
+                description: "Execute Python code directly in a kernel and return the result. Lower-level API that bypasses session management.",
+                parameters: {
+                    type: "object",
+                    properties: {
+                        kernelId: {
+                            type: "string",
+                            description: "The unique identifier of the kernel"
+                        },
+                        code: {
+                            type: "string",
+                            description: "Python code to execute"
+                        }
+                    },
+                    required: ["kernelId", "code"]
+                }
+            }
+        };
+
+        // Create execute function and attach schema
+        const executeFunction = async (sessionId, script, config = {}, progress_callback = null, context = null) => {
+            const session = sessions.get(sessionId);
+            if (!session) {
+                throw new Error(`Session ${sessionId} not found`);
+            }
+            
+            addLog(sessionId, 'info', `Executing script (${script.length} chars)`);
+            
+            try {
+                const outputs = [];
+                const stream = kernelManager.executeStream(session.kernelId, script);
+                
+                for await (const event of stream) {
+                    outputs.push(event);
+                    
+                    // Call progress callback if provided
+                    if (progress_callback) {
+                        await progress_callback({
+                            type: 'output',
+                            event: event
+                        });
+                    }
+                    
+                    // Log certain events
+                    if (event.type === 'error') {
+                        addLog(sessionId, 'error', `Execution error: ${event.data.ename}: ${event.data.evalue}`);
+                    }
+                }
+                
+                addLog(sessionId, 'info', 'Script execution completed');
+                
+                return {
+                    outputs,
+                    success: !outputs.some(o => o.type === 'error')
+                };
+                
+            } catch (error) {
+                addLog(sessionId, 'error', `Execution failed: ${error.message}`);
+                throw error;
+            }
+        };
+        executeFunction.__schema__ = schemas.execute;
+
         // Service API implementation with worker interface
         const service = await hyphaServer.registerService({
             type: 'server-app-worker',
             id: 'python-kernel-worker',
             name: 'Python Kernel Worker',
-            description: 'Web-based Python kernel worker with streaming execution and visualization support',
+            description: 'Web-based Python kernel worker with streaming execution and visualization support. Provides a full Python 3.11 environment running in the browser via Pyodide/WebAssembly. Supports scientific computing with numpy, matplotlib, pandas, and can install additional pure Python packages. Ideal for data analysis, education, and interactive Python execution without server infrastructure.',
             supported_types: ['python-kernel', 'jupyter-kernel', 'python-script'],
             visibility: 'public',
             run_in_executor: false,
@@ -418,8 +799,8 @@ async function registerKernelService() {
                 require_context: false
             },
             
-            // Required worker methods
-            start: async (config = {}, context = null) => {
+            // Required worker methods with schemas
+            start: Object.assign(async (config = {}, context = null) => {
                 const sessionId = `session_${++sessionCounter}_${Date.now()}`;
                 
                 try {
@@ -457,9 +838,9 @@ async function registerKernelService() {
                     addLog(sessionId, 'error', `Failed to start session: ${error.message}`);
                     throw error;
                 }
-            },
+            }, { __schema__: schemas.start }),
             
-            stop: async (sessionId, context = null) => {
+            stop: Object.assign(async (sessionId, context = null) => {
                 const session = sessions.get(sessionId);
                 if (!session) {
                     throw new Error(`Session ${sessionId} not found`);
@@ -487,9 +868,9 @@ async function registerKernelService() {
                     addLog(sessionId, 'error', `Failed to stop session: ${error.message}`);
                     throw error;
                 }
-            },
+            }, { __schema__: schemas.stop }),
             
-            get_logs: async (sessionId, type = null, offset = 0, limit = null, context = null) => {
+            get_logs: Object.assign(async (sessionId, type = null, offset = 0, limit = null, context = null) => {
                 const logs = sessionLogs.get(sessionId) || [];
                 
                 let filteredLogs = logs;
@@ -505,53 +886,13 @@ async function registerKernelService() {
                     total: filteredLogs.length,
                     session_id: sessionId
                 };
-            },
+            }, { __schema__: schemas.get_logs }),
             
             // Execute code in a session
-            execute: async (sessionId, script, config = {}, progress_callback = null, context = null) => {
-                const session = sessions.get(sessionId);
-                if (!session) {
-                    throw new Error(`Session ${sessionId} not found`);
-                }
-                
-                addLog(sessionId, 'info', `Executing script (${script.length} chars)`);
-                
-                try {
-                    const outputs = [];
-                    const stream = kernelManager.executeStream(session.kernelId, script);
-                    
-                    for await (const event of stream) {
-                        outputs.push(event);
-                        
-                        // Call progress callback if provided
-                        if (progress_callback) {
-                            await progress_callback({
-                                type: 'output',
-                                event: event
-                            });
-                        }
-                        
-                        // Log certain events
-                        if (event.type === 'error') {
-                            addLog(sessionId, 'error', `Execution error: ${event.data.ename}: ${event.data.evalue}`);
-                        }
-                    }
-                    
-                    addLog(sessionId, 'info', 'Script execution completed');
-                    
-                    return {
-                        outputs,
-                        success: !outputs.some(o => o.type === 'error')
-                    };
-                    
-                } catch (error) {
-                    addLog(sessionId, 'error', `Execution failed: ${error.message}`);
-                    throw error;
-                }
-            },
+            execute: executeFunction,
             
             // Kernel lifecycle management
-            createKernel: async (options = {}) => {
+            createKernel: Object.assign(async (options = {}) => {
                 const mode = options.mode || 'worker';
                 const kernelId = await kernelManager.createKernel({
                     mode: mode === 'worker' ? KernelMode.WORKER : KernelMode.MAIN_THREAD,
@@ -559,20 +900,20 @@ async function registerKernelService() {
                     ...options
                 });
                 return { kernelId, status: 'created' };
-            },
+            }, { __schema__: schemas.createKernel }),
             
-            destroyKernel: async (kernelId) => {
+            destroyKernel: Object.assign(async (kernelId) => {
                 await kernelManager.destroyKernel(kernelId);
                 return { status: 'destroyed' };
-            },
+            }, { __schema__: schemas.destroyKernel }),
             
-            listKernels: async (namespace = null) => {
+            listKernels: Object.assign(async (namespace = null) => {
                 const kernels = await kernelManager.listKernels(namespace);
                 return kernels;
-            },
+            }, { __schema__: schemas.listKernels }),
             
             // Execution methods
-            execute: async (kernelId, code) => {
+            execute: Object.assign(async (kernelId, code) => {
                 const kernel = kernelManager.getKernel(kernelId);
                 if (!kernel) {
                     throw new Error(`Kernel ${kernelId} not found`);
@@ -580,14 +921,14 @@ async function registerKernelService() {
                 
                 const result = await kernel.kernel.execute(code);
                 return result;
-            },
+            }, { __schema__: schemas.executeDirect }),
             
-            executeStream: async function*(kernelId, code) {
+            executeStream: Object.assign(async function*(kernelId, code) {
                 // This returns an async generator for streaming
                 yield* executeStreamGenerator(kernelId, code);
-            },
+            }, { __schema__: schemas.executeStream }),
             
-            executeWithOutput: async (kernelId, code) => {
+            executeWithOutput: Object.assign(async (kernelId, code) => {
                 // Collect all output into a single response
                 const outputs = [];
                 const stream = kernelManager.executeStream(kernelId, code);
@@ -600,15 +941,15 @@ async function registerKernelService() {
                     outputs,
                     success: !outputs.some(o => o.type === 'error')
                 };
-            },
+            }, { __schema__: schemas.executeWithOutput }),
             
             // Kernel control
-            interruptKernel: async (kernelId) => {
+            interruptKernel: Object.assign(async (kernelId) => {
                 const success = await kernelManager.interruptKernel(kernelId);
                 return { success };
-            },
+            }, { __schema__: schemas.interruptKernel }),
             
-            restartKernel: async (kernelId) => {
+            restartKernel: Object.assign(async (kernelId) => {
                 // Get current kernel options
                 const kernel = kernelManager.getKernel(kernelId);
                 if (!kernel) {
@@ -627,10 +968,10 @@ async function registerKernelService() {
                     newKernelId,
                     status: 'restarted'
                 };
-            },
+            }, { __schema__: schemas.restartKernel }),
             
             // Kernel status
-            getKernelStatus: async (kernelId) => {
+            getKernelStatus: Object.assign(async (kernelId) => {
                 const kernel = kernelManager.getKernel(kernelId);
                 if (!kernel) {
                     return { status: 'not_found' };
@@ -642,15 +983,15 @@ async function registerKernelService() {
                     language: kernel.lang,
                     status: 'ready' // Could be enhanced with actual status
                 };
-            },
+            }, { __schema__: schemas.getKernelStatus }),
             
             // Pool management
-            getPoolStats: async () => {
+            getPoolStats: Object.assign(async () => {
                 return kernelManager.getPoolStats();
-            },
+            }, { __schema__: schemas.getPoolStats }),
             
             // Package installation
-            installPackages: async (kernelId, packages) => {
+            installPackages: Object.assign(async (kernelId, packages) => {
                 const kernel = kernelManager.getKernel(kernelId);
                 if (!kernel) {
                     throw new Error(`Kernel ${kernelId} not found`);
@@ -664,10 +1005,10 @@ print(f"Successfully installed: {', '.join(${JSON.stringify(packages)})}")
                 
                 const result = await kernel.kernel.execute(code);
                 return result;
-            },
+            }, { __schema__: schemas.installPackages }),
             
             // Startup script support
-            runStartupScript: async (kernelId, script) => {
+            runStartupScript: Object.assign(async (kernelId, script) => {
                 const kernel = kernelManager.getKernel(kernelId);
                 if (!kernel) {
                     throw new Error(`Kernel ${kernelId} not found`);
@@ -678,10 +1019,10 @@ print(f"Successfully installed: {', '.join(${JSON.stringify(packages)})}")
                     success: result.success,
                     error: result.error
                 };
-            },
+            }, { __schema__: schemas.runStartupScript }),
             
             // Service info
-            getServiceInfo: async () => {
+            getServiceInfo: Object.assign(async () => {
                 return {
                     name: 'Python Kernel Service',
                     version: '0.1.3',
@@ -695,7 +1036,7 @@ print(f"Successfully installed: {', '.join(${JSON.stringify(packages)})}")
                     },
                     activeKernels: await kernelManager.listKernels()
                 };
-            }
+            }, { __schema__: schemas.getServiceInfo })
         });
         
         // Extract service details and build full URL
