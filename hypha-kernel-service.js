@@ -702,17 +702,10 @@ print(f"Successfully installed: {', '.join(${JSON.stringify(packages)})}")
         const serviceId = service.id;
         // The service.id format is "workspace/client_id:service_name"
         // We need to extract just "client_id:service_name"
-        let actualServiceId = serviceId;
+        let actualServiceId = serviceId.split("/")[1];
         
         // Check if serviceId contains workspace prefix
         const workspace = hyphaServer.config.workspace;
-        if (serviceId.startsWith(workspace + '/')) {
-            actualServiceId = serviceId.substring(workspace.length + 1);
-        } else if (serviceId.includes('/')) {
-            // If it has a slash but doesn't start with our workspace, take the part after the slash
-            const parts = serviceId.split('/');
-            actualServiceId = parts[parts.length - 1];
-        }
         
         // Get the server URL - it might not be in config, so use query params or connection info
         const queryParams = getQueryParams();
