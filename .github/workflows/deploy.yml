@@ -48,7 +48,7 @@ jobs:
           cp hypha-kernel-service.js static-site/
           
           # Copy built distribution files
-          cp -r dist static-site/
+          cp -r dist/* static-site/
           
           # Copy pypi wheels
           cp -r pypi static-site/ || true
