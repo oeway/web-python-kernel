@@ -80,6 +80,7 @@ export interface IKernelManagerOptions {
     language: KernelLanguage;
   }>; // Restrict which kernel types can be created
   interruptionMode?: 'shared-array-buffer' | 'kernel-interrupt' | 'auto'; // Default: 'auto'
+  workerUrl?: string; // Optional custom URL for the worker script
 }
 
 // Interface for kernel instance
@@ -171,6 +172,53 @@ export class KernelManager extends EventEmitter {
   // Interruption mode configuration
   private interruptionMode: 'shared-array-buffer' | 'kernel-interrupt' | 'auto';
   
+  // Worker URL configuration
+  private workerUrl: string | undefined;
+  
+  /**
+   * Resolve the worker URL based on the current environment
+   * @private
+   * @returns The resolved worker URL
+   */
+  private resolveWorkerUrl(): string {
+    // If a custom worker URL is provided, use it
+    if (this.workerUrl) {
+      return this.workerUrl;
+    }
+    
+    // Try to detect the current script location and derive the worker URL
+    if (typeof window !== 'undefined' && window.location) {
+      // Browser environment
+      const currentScript = (document.currentScript as HTMLScriptElement) || 
+                           Array.from(document.getElementsByTagName('script')).pop();
+      
+      if (currentScript && currentScript.src) {
+        // Get the base URL from the current script
+        const scriptUrl = new URL(currentScript.src);
+        const baseUrl = scriptUrl.href.substring(0, scriptUrl.href.lastIndexOf('/'));
+        
+        // Check if we're loading from a CDN (jsdelivr, unpkg, etc.)
+        if (scriptUrl.hostname.includes('jsdelivr.net') || 
+            scriptUrl.hostname.includes('unpkg.com') ||
+            scriptUrl.hostname.includes('cdnjs.cloudflare.com')) {
+          // For CDN, the worker should be at the same path
+          return `${baseUrl}/kernel.worker.js`;
+        }
+        
+        // For local development or custom deployments
+        return `${baseUrl}/kernel.worker.js`;
+      }
+      
+      // Fallback to relative path from current location
+      const baseUrl = window.location.origin + window.location.pathname.substring(0, window.location.pathname.lastIndexOf('/'));
+      return `${baseUrl}/dist/kernel.worker.js`;
+    }
+    
+    // Node.js or unknown environment - use relative path
+    // This may not work in Node.js but is provided as a fallback
+    return './kernel.worker.js';
+  }
+  
   /**
    * Helper function to check if an error is a KeyboardInterrupt
    * @private
@@ -255,6 +303,9 @@ export class KernelManager extends EventEmitter {
     
     // Set interruption mode (default to 'auto')
     this.interruptionMode = options.interruptionMode || 'auto';
+    
+    // Set worker URL if provided
+    this.workerUrl = options.workerUrl;
     
     // Set default allowed kernel types (worker mode only for security)
     this.allowedKernelTypes = options.allowedKernelTypes || [
@@ -668,6 +719,27 @@ export class KernelManager extends EventEmitter {
   }
   
   /**
+   * Get the current worker URL configuration
+   * @returns The worker URL or undefined if using auto-detection
+   */
+  public getWorkerUrl(): string | undefined {
+    return this.workerUrl;
+  }
+  
+  /**
+   * Set a custom worker URL for kernel workers
+   * @param url The URL to the kernel.worker.js file
+   * @example
+   * // For CDN usage:
+   * manager.setWorkerUrl('https://cdn.jsdelivr.net/npm/web-python-kernel@latest/dist/kernel.worker.js');
+   * // For local development:
+   * manager.setWorkerUrl('/dist/kernel.worker.js');
+   */
+  public setWorkerUrl(url: string | undefined): void {
+    this.workerUrl = url;
+  }
+  
+  /**
    * Create a new kernel instance
    * @param options Options for creating the kernel
    * @param options.id Optional custom ID for the kernel
@@ -1055,11 +1127,9 @@ export class KernelManager extends EventEmitter {
       };
     }
     
-    // Create worker by loading the compiled worker bundle
-    // The worker bundle will be available as a separate file after webpack compilation
-    // Use relative path from the dist directory where the main bundle is served
-    const workerPath = './dist/kernel.worker.js';
-    const worker = new Worker(workerPath, { type: 'classic' });
+    // Determine the worker URL based on the environment
+    const workerUrl = this.resolveWorkerUrl();
+    const worker = new Worker(workerUrl, { type: 'classic' });
     
     // Create a message channel for events
     const { port1, port2 } = new MessageChannel();

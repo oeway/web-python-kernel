@@ -812,7 +812,7 @@ print("✅ This should not appear if interrupted!")'>
                     let kernelModule;
                     try {
                         // Import the MJS version
-                        kernelModule = await import('./dist/web-python-kernel.mjs');
+                        kernelModule = await import('./web-python-kernel.mjs');
                     } catch (error) {
                         throw new Error(`Web-python-kernel MJS module not found: ${error.message}`);
                     }

@@ -29,7 +29,7 @@ A Jupyter-like Python kernel for the browser with real-time streaming output, in
 
     <script type="module">
         // Import from CDN
-        import { KernelManager, KernelMode, KernelLanguage } from 'https://cdn.jsdelivr.net/npm/web-python-kernel@0.1.4/dist/web-python-kernel.mjs';
+        import { KernelManager, KernelMode, KernelLanguage } from 'https://cdn.jsdelivr.net/npm/web-python-kernel@0.1.5/dist/web-python-kernel.mjs';
         
         // Create kernel manager with worker mode (recommended)
         const manager = new KernelManager({
@@ -37,7 +37,9 @@ A Jupyter-like Python kernel for the browser with real-time streaming output, in
                 { mode: KernelMode.WORKER, language: KernelLanguage.PYTHON }
             ],
             // Use SharedArrayBuffer for interrupts if available, fallback to kernel.interrupt()
-            interruptionMode: 'auto'
+            interruptionMode: 'auto',
+            // Important: specify worker URL when using CDN
+            workerUrl: 'https://cdn.jsdelivr.net/npm/web-python-kernel@0.1.5/dist/kernel.worker.js'
         });
         
         // Create a Python kernel
@@ -86,12 +88,36 @@ print("Done!")
 import { KernelManager } from 'https://cdn.jsdelivr.net/npm/web-python-kernel@latest/dist/web-python-kernel.mjs';
 
 // Specific version  
-import { KernelManager } from 'https://cdn.jsdelivr.net/npm/web-python-kernel@0.1.4/dist/web-python-kernel.mjs';
+import { KernelManager } from 'https://cdn.jsdelivr.net/npm/web-python-kernel@0.1.5/dist/web-python-kernel.mjs';
 
 // Alternative CDNs
-import { KernelManager } from 'https://unpkg.com/web-python-kernel@0.1.4/dist/web-python-kernel.mjs';
-import { KernelManager } from 'https://esm.sh/web-python-kernel@0.1.4/dist/web-python-kernel.mjs';
+import { KernelManager } from 'https://unpkg.com/web-python-kernel@0.1.5/dist/web-python-kernel.mjs';
+import { KernelManager } from 'https://esm.sh/web-python-kernel@0.1.5/dist/web-python-kernel.mjs';
 ```
+
+### Worker URL Configuration for CDN Usage
+
+When using the library from a CDN, you must specify the full URL to the worker file:
+
+```javascript
+// Using jsdelivr CDN
+const manager = new KernelManager({
+    workerUrl: 'https://cdn.jsdelivr.net/npm/web-python-kernel@latest/dist/kernel.worker.js'
+});
+
+// Using unpkg CDN
+const manager = new KernelManager({
+    workerUrl: 'https://unpkg.com/web-python-kernel@latest/dist/kernel.worker.js'
+});
+
+// For local development (default behavior)
+const manager = new KernelManager(); // Will auto-detect worker location
+
+// You can also set it after initialization
+manager.setWorkerUrl('https://cdn.jsdelivr.net/npm/web-python-kernel@latest/dist/kernel.worker.js');
+```
+
+**Important**: When loading from a CDN, always specify the `workerUrl` to ensure the worker script loads correctly. The library will attempt to auto-detect the worker location, but explicit configuration is more reliable for production use.
 
 ### NPM Installation
 
@@ -113,7 +139,9 @@ const manager = new KernelManager({
     // Recommend worker mode for better performance and isolation
     allowedKernelTypes: [
         { mode: KernelMode.WORKER, language: KernelLanguage.PYTHON }
-    ]
+    ],
+    // Optional: specify worker URL for CDN deployments
+    // workerUrl: 'https://cdn.jsdelivr.net/npm/web-python-kernel@latest/dist/kernel.worker.js'
 });
 
 // Create a kernel

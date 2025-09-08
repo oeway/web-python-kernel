@@ -1,6 +1,6 @@
 {
   "name": "web-python-kernel",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "A web-based Python kernel for browser environments with TypeScript support",
   "main": "dist/web-python-kernel.js",
   "module": "dist/web-python-kernel.mjs",
@@ -9,14 +9,15 @@
     "dist/"
   ],
   "scripts": {
-    "build": "npm run clean && npm run build:all && cp -r src/pypi .",
+    "build": "npm run clean && npm run build:all && npm run copy:files",
     "build:all": "node --max-old-space-size=8192 ./node_modules/.bin/webpack --mode=development --env format=umd --env clean=true && node --max-old-space-size=8192 ./node_modules/.bin/webpack --mode=production --env format=umd && node --max-old-space-size=8192 ./node_modules/.bin/webpack --mode=development --env format=esm && node --max-old-space-size=8192 ./node_modules/.bin/webpack --mode=production --env format=esm",
+    "copy:files": "cp -r src/pypi . && cp index.html dist/ 2>/dev/null || true && cp playground.html dist/ 2>/dev/null || true && cp hypha-kernel-service.js dist/ 2>/dev/null || true",
     "build:umd:dev": "node --max-old-space-size=8192 ./node_modules/.bin/webpack --mode=development --env format=umd",
     "build:umd:prod": "node --max-old-space-size=8192 ./node_modules/.bin/webpack --mode=production --env format=umd",
     "build:esm:dev": "node --max-old-space-size=8192 ./node_modules/.bin/webpack --mode=development --env format=esm",
     "build:esm:prod": "node --max-old-space-size=8192 ./node_modules/.bin/webpack --mode=production --env format=esm",
     "build:dev": "npm run build:umd:dev && npm run build:esm:dev && cp -r src/pypi .",
-    "build:prod": "npm run build:umd:prod && npm run build:esm:prod && cp -r src/pypi .",
+    "build:prod": "npm run build:umd:prod && npm run build:esm:prod && npm run copy:files",
     "dev": "npm run build:dev && node serve.js",
     "dev:hot": "webpack serve --mode=development --hot",
     "start": "npm run dev",

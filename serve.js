@@ -8,6 +8,7 @@ const url = require('url');
 const PORT = process.env.PORT || 8080;
 // set dist dir
 const ROOT_DIR = __dirname;
+const DIST_DIR = path.join(__dirname, 'dist');
 
 const MIME_TYPES = {
   '.html': 'text/html',
@@ -64,9 +65,27 @@ const server = http.createServer((req, res) => {
     pathname = '/index.html';
   }
 
-  
-  
-  const filepath = path.join(ROOT_DIR, pathname);
+  // Determine file path based on file type
+  let filepath;
+  if (pathname === '/index.html' || pathname === '/playground.html' || pathname === '/test-execute.html') {
+    // Serve HTML files from root directory
+    filepath = path.join(ROOT_DIR, pathname);
+  } else if (pathname === '/hypha-kernel-service.js') {
+    // Serve hypha-kernel-service.js from root directory
+    filepath = path.join(ROOT_DIR, pathname);
+  } else if (pathname.startsWith('/dist/')) {
+    // Handle explicit /dist/ paths
+    filepath = path.join(ROOT_DIR, pathname);
+  } else if (pathname.startsWith('/src/') || pathname.startsWith('/tests/')) {
+    // Serve source files from their respective directories
+    filepath = path.join(ROOT_DIR, pathname);
+  } else if (pathname.endsWith('.js') || pathname.endsWith('.mjs') || pathname.endsWith('.map') || pathname.endsWith('.whl')) {
+    // Serve other JS, MJS, source maps, and wheel files from dist directory
+    filepath = path.join(DIST_DIR, pathname);
+  } else {
+    // Default to root directory for other files
+    filepath = path.join(ROOT_DIR, pathname);
+  }
   
   // Check if file exists
   fs.access(filepath, fs.constants.F_OK, (err) => {
@@ -152,6 +171,10 @@ server.listen(PORT, () => {
   console.log('   - Matplotlib, Plotly, Seaborn plotting capabilities');
   console.log('   - Automatic display_data rendering for plots');
   console.log('   - File watching with auto-reload on changes');
+  console.log('');
+  console.log('📁 File serving:');
+  console.log('   - HTML files: served from root directory');
+  console.log('   - JS/MJS files: served from dist/ directory');
   console.log('');
   console.log('📁 Watching for changes in HTML, JS, CSS files...');
   console.log('Press Ctrl+C to stop the server');

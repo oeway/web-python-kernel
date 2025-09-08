@@ -9,7 +9,7 @@ let KernelManager, KernelMode, KernelLanguage, KernelEvents;
 async function loadKernelModule() {
     // Use relative path for GitHub Pages compatibility
     const kernelModuleUrl = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-        ? './dist/web-python-kernel.mjs'
+        ? './web-python-kernel.mjs'
         : 'https://cdn.jsdelivr.net/npm/web-python-kernel@latest/dist/web-python-kernel.mjs';
     
     const module = await import(kernelModuleUrl);
