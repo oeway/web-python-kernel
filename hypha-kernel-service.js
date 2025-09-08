@@ -197,7 +197,6 @@ async function runCode() {
             await updateKernelList();
             return;
         }
-        
         const stream = kernelManager.executeStream(currentKernelId, code);
         let hasError = false;
         

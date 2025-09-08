@@ -2493,52 +2493,23 @@ export class KernelManager extends EventEmitter {
 
   /**
    * Execute Python code in a kernel
-   * Overrides the kernel's execute method to track executions
+   * Uses executeStream to collect all outputs and return them
    * @param kernelId ID of the kernel to use
    * @param code Python code to execute
    * @param parent Optional parent message header
-   * @returns Promise resolving to execution result
+   * @returns Promise resolving to execution result with collected outputs
    */
   public async execute(
     kernelId: string,
     code: string,
     parent: any = {}
-  ): Promise<{ success: boolean, result?: any, error?: Error }> {
+  ): Promise<{ success: boolean, outputs?: any, error?: Error, ename?: string, evalue?: string, traceback?: any }> {
     const instance = this.getKernel(kernelId);
     
     if (!instance) {
       throw new Error(`Kernel with ID ${kernelId} not found`);
     }
-    
-    // Update kernel activity
-    this.updateKernelActivity(kernelId);
-    
-    // Track this execution with the code for better monitoring
-    const executionId = this.trackExecution(kernelId, code);
-    
-    try {
-      // Execute the code
-      const result = await instance.kernel.execute(code, parent);
-      
-      // Update activity after execution completes
-      this.updateKernelActivity(kernelId);
-      
-      // Complete execution tracking
-      this.completeExecution(kernelId, executionId);
-      
-      return result;
-    } catch (error) {
-      // Update activity even if there's an error
-      this.updateKernelActivity(kernelId);
-      
-      // Complete execution tracking even on error
-      this.completeExecution(kernelId, executionId);
-      
-      return {
-        success: false,
-        error: error instanceof Error ? error : new Error(String(error))
-      };
-    }
+    return await instance.kernel.execute(code, parent);
   }
 
   /**

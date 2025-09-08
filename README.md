@@ -29,7 +29,7 @@ A Jupyter-like Python kernel for the browser with real-time streaming output, in
 
     <script type="module">
         // Import from CDN
-        import { KernelManager, KernelMode, KernelLanguage } from 'https://cdn.jsdelivr.net/npm/web-python-kernel@0.1.1/dist/web-python-kernel.mjs';
+        import { KernelManager, KernelMode, KernelLanguage } from 'https://cdn.jsdelivr.net/npm/web-python-kernel@0.1.4/dist/web-python-kernel.mjs';
         
         // Create kernel manager with worker mode (recommended)
         const manager = new KernelManager({
@@ -86,11 +86,11 @@ print("Done!")
 import { KernelManager } from 'https://cdn.jsdelivr.net/npm/web-python-kernel@latest/dist/web-python-kernel.mjs';
 
 // Specific version  
-import { KernelManager } from 'https://cdn.jsdelivr.net/npm/web-python-kernel@0.1.1/dist/web-python-kernel.mjs';
+import { KernelManager } from 'https://cdn.jsdelivr.net/npm/web-python-kernel@0.1.4/dist/web-python-kernel.mjs';
 
 // Alternative CDNs
-import { KernelManager } from 'https://unpkg.com/web-python-kernel@0.1.1/dist/web-python-kernel.mjs';
-import { KernelManager } from 'https://esm.sh/web-python-kernel@0.1.1/dist/web-python-kernel.mjs';
+import { KernelManager } from 'https://unpkg.com/web-python-kernel@0.1.4/dist/web-python-kernel.mjs';
+import { KernelManager } from 'https://esm.sh/web-python-kernel@0.1.4/dist/web-python-kernel.mjs';
 ```
 
 ### NPM Installation
