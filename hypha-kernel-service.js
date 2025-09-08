@@ -959,7 +959,7 @@ async function registerKernelService() {
             description: 'Web-based Python kernel worker. Provides a full Python 3.11 environment running in the browser via Pyodide/WebAssembly. Supports scientific computing with numpy, matplotlib, pandas, and can install additional pure Python packages. Ideal for data analysis, education, and interactive Python execution without server infrastructure.',
             supported_types: ['web-python-kernel'],
             config: {
-                visibility: 'public',
+                visibility: 'protected',
                 require_context: true
             },
             
