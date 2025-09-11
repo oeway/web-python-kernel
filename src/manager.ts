@@ -90,7 +90,7 @@ export interface IKernelInstance {
   mode: KernelMode;
   language: KernelLanguage;
   worker?: Worker;
-  created: Date;
+  created: string;
   options: IManagerKernelOptions;
   isFromPool?: boolean; // Track if this kernel came from the pool
   destroy(): Promise<void>;
@@ -661,7 +661,7 @@ export class KernelManager extends EventEmitter {
       mode: poolKernel.mode,
       language: poolKernel.language,
       worker: poolKernel.worker,
-      created: new Date(), // Update creation time
+      created: new Date().toISOString(), // Update creation time
       options: { ...poolKernel.options, ...options },
       isFromPool: true,
       destroy: poolKernel.destroy // Preserve the original destroy function
@@ -1072,7 +1072,7 @@ export class KernelManager extends EventEmitter {
       kernel,
       mode: KernelMode.MAIN_THREAD,
       language,
-      created: new Date(),
+      created: new Date().toISOString(),
       options,
       destroy: async () => {
         // Nothing special to do for main thread kernel
@@ -1322,7 +1322,7 @@ export class KernelManager extends EventEmitter {
       mode: KernelMode.WORKER,
       language,
       worker,
-      created: new Date(),
+      created: new Date().toISOString(),
       options, // Store the options for reference
       destroy: async () => {
         // Clean up the worker and event listeners
@@ -1386,7 +1386,7 @@ export class KernelManager extends EventEmitter {
     mode: KernelMode;
     language: KernelLanguage;
     status: "active" | "busy" | "unknown";
-    created: Date;
+    created: string;
     namespace?: string;
     deno?: {
       permissions?: IDenoPermissions;
@@ -1424,7 +1424,7 @@ export class KernelManager extends EventEmitter {
             mode: instance.mode,
             language: instance.language,
             status,
-            created: instance.created || new Date(),
+            created: instance.created || new Date().toISOString(),
             namespace: extractedNamespace,
             deno: instance.options?.deno
           };

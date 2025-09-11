@@ -23,10 +23,12 @@ async function loadKernelModule() {
 function getQueryParams() {
     const params = new URLSearchParams(window.location.search);
     return {
-        server_url: params.get('server_url') || params.get('server-url') || 'https://hypha.aicell.io',
-        workspace: params.get('workspace') || params.get('ws') || null,
-        token: params.get('token') || params.get('t') || null,
-        client_id: params.get('client_id') || params.get('client-id') || null
+        server_url: params.get('server_url') || 'https://hypha.aicell.io',
+        workspace: params.get('workspace') || null,
+        token: params.get('token') || null,
+        client_id: params.get('client_id') || null,
+        visibility: params.get('visibility') || 'protected',
+        service_id: params.get('service_id') || 'web-python-kernel-worker'
     };
 }
 
@@ -951,15 +953,22 @@ async function registerKernelService() {
         };
         executeFunction.__schema__ = schemas.execute;
 
+        // Get configuration from query parameters
+        const serviceQueryParams = getQueryParams();
+        const visibility = serviceQueryParams.visibility;
+        const serviceId = serviceQueryParams.service_id;
+        
+        addOutput('stdout', `Service configuration: ID="${serviceId}", visibility="${visibility}"`);
+        
         // Service API implementation with worker interface
         const service = await hyphaServer.registerService({
             type: 'server-app-worker',
-            id: 'web-python-kernel-worker',
+            id: serviceId,
             name: 'Web Python Kernel Worker',
             description: 'Web-based Python kernel worker. Provides a full Python 3.11 environment running in the browser via Pyodide/WebAssembly. Supports scientific computing with numpy, matplotlib, pandas, and can install additional pure Python packages. Ideal for data analysis, education, and interactive Python execution without server infrastructure.',
             supported_types: ['web-python-kernel'],
             config: {
-                visibility: 'protected',
+                visibility: visibility,
                 require_context: true
             },
             
@@ -1073,6 +1082,7 @@ async function registerKernelService() {
             
             listKernels: Object.assign(async ({ namespace = null } = {}, context = null) => {
                 const kernels = await kernelManager.listKernels(namespace);
+                // The created field is already a string (ISO format), no conversion needed
                 return kernels;
             }, { __schema__: schemas.listKernels }),
             
@@ -1144,6 +1154,17 @@ print(f"Successfully installed: {', '.join(${JSON.stringify(packages)})}")
                 `;
                 
                 const result = await kernel.kernel.execute(code);
+                // Convert Error objects to serializable format for Hypha RPC
+                if (result.error && result.error instanceof Error) {
+                    return {
+                        ...result,
+                        error: {
+                            name: result.error.name,
+                            message: result.error.message,
+                            stack: result.error.stack
+                        }
+                    };
+                }
                 return result;
             }, { __schema__: schemas.installPackages }),
             
@@ -1155,14 +1176,29 @@ print(f"Successfully installed: {', '.join(${JSON.stringify(packages)})}")
                 }
                 
                 const result = await kernel.kernel.execute(script);
-                return {
-                    success: result.success,
-                    error: result.error
+                // Convert Error objects to serializable format for Hypha RPC
+                const serializedResult = {
+                    success: result.success
                 };
+                
+                if (result.error && result.error instanceof Error) {
+                    serializedResult.error = {
+                        name: result.error.name,
+                        message: result.error.message,
+                        stack: result.error.stack
+                    };
+                } else if (result.error) {
+                    serializedResult.error = result.error;
+                }
+                
+                return serializedResult;
             }, { __schema__: schemas.runStartupScript }),
             
             // Service info
             getServiceInfo: Object.assign(async (context = null) => {
+                const kernels = await kernelManager.listKernels();
+                // The created field is already a string (ISO format), no conversion needed
+                
                 return {
                     name: 'Python Kernel Service',
                     version: '0.1.3',
@@ -1174,32 +1210,32 @@ print(f"Successfully installed: {', '.join(${JSON.stringify(packages)})}")
                         worker_mode: true,
                         main_thread_mode: true
                     },
-                    activeKernels: await kernelManager.listKernels()
+                    activeKernels: kernels
                 };
             }, { __schema__: schemas.getServiceInfo })
         });
         
         // Extract service details and build full URL
-        const serviceId = service.id;
+        const fullServiceId = service.id;
         // The service.id format is "workspace/client_id:service_name"
         // We need to extract just "client_id:service_name"
-        let actualServiceId = serviceId.split("/")[1];
+        let actualServiceId = fullServiceId.split("/")[1];
         
         // Check if serviceId contains workspace prefix
         const workspace = hyphaServer.config.workspace;
         
         // Get the server URL - it might not be in config, so use query params or connection info
-        const queryParams = getQueryParams();
-        const serverUrl = queryParams.server_url || hyphaServer.config.server_url || 'https://hypha.aicell.io';
+        const urlQueryParams = getQueryParams();
+        const serverUrl = urlQueryParams.server_url || hyphaServer.config.server_url || 'https://hypha.aicell.io';
         // Build the correct service URL without trailing slash
         const fullServiceUrl = `${serverUrl}/${workspace}/services/${actualServiceId}`;
         
         // Store the service info for later reference
-        registeredServiceId = serviceId;
+        registeredServiceId = fullServiceId;
         registeredServiceUrl = fullServiceUrl;
         
         addOutput('result', `✓ Kernel service registered successfully`);
-        addOutput('stdout', `Service ID: ${serviceId}`);
+        addOutput('stdout', `Service ID: ${fullServiceId}`);
         addOutput('stdout', `Service URL: ${fullServiceUrl}`);
         
         // Show service info
@@ -1274,10 +1310,13 @@ document.addEventListener('DOMContentLoaded', async () => {
             addOutput('stdout', 'Auto-connecting to Hypha with URL parameters...');
             addOutput('stdout', `Server: ${queryParams.server_url}`);
             if (queryParams.workspace) addOutput('stdout', `Workspace: ${queryParams.workspace}`);
+            addOutput('stdout', `Service ID: ${queryParams.service_id}`);
+            addOutput('stdout', `Visibility: ${queryParams.visibility}`);
             await connectToHypha();
         } else {
             addOutput('stdout', 'Ready to connect. Click "Connect to Hypha" to register the service.');
-            addOutput('stdout', 'URL parameters supported: server_url, workspace, token, client_id');
+            addOutput('stdout', 'URL parameters supported: server_url, workspace, token, client_id, visibility, service_id');
+            addOutput('stdout', `Default service ID: ${queryParams.service_id}, visibility: ${queryParams.visibility}`);
         }
         
     } catch (error) {
