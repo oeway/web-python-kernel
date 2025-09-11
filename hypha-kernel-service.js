@@ -894,9 +894,14 @@ async function registerKernelService() {
 
         // Create execute function and attach schema - always returns output
         const executeFunction = async ({ kernelId, code, config = {}, progress_callback = null }, context = null) => {
+            // Log remote call
+            addOutput('result', `🌐 Remote call: execute() - Running code in kernel ${kernelId.substring(0, 8)}...`);
+            addOutput('stdout', `Code length: ${code.length} characters`);
+            
             // First check if the kernel actually exists
             const kernel = kernelManager.getKernel(kernelId);
             if (!kernel) {
+                addOutput('error', `❌ Kernel ${kernelId.substring(0, 8)}... not found`);
                 throw new Error(`Kernel ${kernelId} not found`);
             }
             
@@ -939,15 +944,19 @@ async function registerKernelService() {
                     addLog(session.id, 'info', 'Script execution completed');
                 }
                 
+                const success = !outputs.some(o => o.type === 'error');
+                addOutput('result', `✓ Remote execution completed in kernel ${kernelId.substring(0, 8)}... (${success ? 'success' : 'with errors'})`);
+                
                 return {
                     outputs,
-                    success: !outputs.some(o => o.type === 'error')
+                    success
                 };
                 
             } catch (error) {
                 if (session) {
                     addLog(session.id, 'error', `Execution failed: ${error.message}`);
                 }
+                addOutput('error', `❌ Remote execution failed in kernel ${kernelId.substring(0, 8)}...: ${error.message}`);
                 throw error;
             }
         };
@@ -975,6 +984,9 @@ async function registerKernelService() {
             // Required worker methods with schemas
             start: Object.assign(async ({ config = {} } = {}, context = null) => {
                 const sessionId = `session_${++sessionCounter}_${Date.now()}`;
+                
+                // Log remote call
+                addOutput('result', `🌐 Remote call: start() - Creating new session ${sessionId}`);
                 
                 try {
                     // Create kernel based on config
@@ -1005,10 +1017,12 @@ async function registerKernelService() {
                         }
                     }
                     
+                    addOutput('result', `✓ Session ${sessionId} created with kernel ${kernelId}`);
                     return { session_id: sessionId, status: 'running' };
                     
                 } catch (error) {
                     addLog(sessionId, 'error', `Failed to start session: ${error.message}`);
+                    addOutput('error', `❌ Failed to create session ${sessionId}: ${error.message}`);
                     throw error;
                 }
             }, { __schema__: schemas.start }),
@@ -1016,8 +1030,12 @@ async function registerKernelService() {
             stop: Object.assign(async ({ sessionId }, context = null) => {
                 const session = sessions.get(sessionId);
                 if (!session) {
+                    addOutput('error', `❌ Remote call: stop() - Session ${sessionId} not found`);
                     throw new Error(`Session ${sessionId} not found`);
                 }
+                
+                // Log remote call
+                addOutput('result', `🌐 Remote call: stop() - Stopping session ${sessionId}`);
                 
                 try {
                     // Destroy the kernel
@@ -1035,20 +1053,27 @@ async function registerKernelService() {
                         sessionLogs.delete(sessionId);
                     }, 60000); // Keep for 1 minute for log retrieval
                     
+                    addOutput('result', `✓ Session ${sessionId} stopped successfully`);
                     return { status: 'stopped' };
                     
                 } catch (error) {
                     addLog(sessionId, 'error', `Failed to stop session: ${error.message}`);
+                    addOutput('error', `❌ Failed to stop session ${sessionId}: ${error.message}`);
                     throw error;
                 }
             }, { __schema__: schemas.stop }),
             
             get_logs: Object.assign(async ({ sessionId, type = null, offset = 0, limit = null } = {}, context = null) => {
+                addOutput('result', `🌐 Remote call: get_logs() - Retrieving logs for session ${sessionId}`);
+                
                 const logs = sessionLogs.get(sessionId) || [];
                 
                 let filteredLogs = logs;
                 if (type) {
                     filteredLogs = logs.filter(log => log.type === type);
+                    addOutput('stdout', `Filtered ${filteredLogs.length}/${logs.length} logs by type: ${type}`);
+                } else {
+                    addOutput('stdout', `Retrieved ${logs.length} logs`);
                 }
                 
                 const start = offset || 0;
@@ -1067,22 +1092,34 @@ async function registerKernelService() {
             // Kernel lifecycle management
             createKernel: Object.assign(async ({ options = {} } = {}, context = null) => {
                 const mode = options.mode || 'worker';
+                addOutput('result', `🌐 Remote call: createKernel() - Creating ${mode} kernel`);
+                
                 const kernelId = await kernelManager.createKernel({
                     mode: mode === 'worker' ? KernelMode.WORKER : KernelMode.MAIN_THREAD,
                     lang: KernelLanguage.PYTHON,
                     ...options
                 });
+                
+                addOutput('result', `✓ Kernel created: ${kernelId.substring(0, 8)}... (${mode} mode)`);
                 return { kernelId, status: 'created' };
             }, { __schema__: schemas.createKernel }),
             
             destroyKernel: Object.assign(async ({ kernelId }, context = null) => {
+                addOutput('result', `🌐 Remote call: destroyKernel() - Destroying kernel ${kernelId.substring(0, 8)}...`);
+                
                 await kernelManager.destroyKernel(kernelId);
+                
+                addOutput('result', `✓ Kernel destroyed: ${kernelId.substring(0, 8)}...`);
                 return { status: 'destroyed' };
             }, { __schema__: schemas.destroyKernel }),
             
             listKernels: Object.assign(async ({ namespace = null } = {}, context = null) => {
+                addOutput('result', `🌐 Remote call: listKernels() - Listing kernels${namespace ? ` in namespace: ${namespace}` : ''}`);
+                
                 const kernels = await kernelManager.listKernels(namespace);
                 // The created field is already a string (ISO format), no conversion needed
+                
+                addOutput('stdout', `Found ${kernels.length} kernel(s)`);
                 return kernels;
             }, { __schema__: schemas.listKernels }),
             
@@ -1095,14 +1132,21 @@ async function registerKernelService() {
             
             // Kernel control
             interruptKernel: Object.assign(async ({ kernelId }, context = null) => {
+                addOutput('result', `🌐 Remote call: interruptKernel() - Interrupting kernel ${kernelId.substring(0, 8)}...`);
+                
                 const success = await kernelManager.interruptKernel(kernelId);
+                
+                addOutput('result', `${success ? '✓' : '❌'} Kernel interrupt ${success ? 'successful' : 'failed'}: ${kernelId.substring(0, 8)}...`);
                 return { success };
             }, { __schema__: schemas.interruptKernel }),
             
             restartKernel: Object.assign(async ({ kernelId }, context = null) => {
+                addOutput('result', `🌐 Remote call: restartKernel() - Restarting kernel ${kernelId.substring(0, 8)}...`);
+                
                 // Get current kernel options
                 const kernel = kernelManager.getKernel(kernelId);
                 if (!kernel) {
+                    addOutput('error', `❌ Kernel ${kernelId.substring(0, 8)}... not found for restart`);
                     throw new Error(`Kernel ${kernelId} not found`);
                 }
                 
@@ -1113,6 +1157,8 @@ async function registerKernelService() {
                     lang: kernel.lang
                 });
                 
+                addOutput('result', `✓ Kernel restarted: ${kernelId.substring(0, 8)}... → ${newKernelId.substring(0, 8)}...`);
+                
                 return { 
                     oldKernelId: kernelId,
                     newKernelId,
@@ -1122,10 +1168,15 @@ async function registerKernelService() {
             
             // Kernel status
             getKernelStatus: Object.assign(async ({ kernelId }, context = null) => {
+                addOutput('result', `🌐 Remote call: getKernelStatus() - Checking status of kernel ${kernelId.substring(0, 8)}...`);
+                
                 const kernel = kernelManager.getKernel(kernelId);
                 if (!kernel) {
+                    addOutput('stdout', `Kernel ${kernelId.substring(0, 8)}... not found`);
                     return { status: 'not_found' };
                 }
+                
+                addOutput('stdout', `Kernel ${kernelId.substring(0, 8)}... status: ready (${kernel.mode} mode)`);
                 
                 return {
                     id: kernelId,
@@ -1137,13 +1188,22 @@ async function registerKernelService() {
             
             // Pool management
             getPoolStats: Object.assign(async (context = null) => {
-                return kernelManager.getPoolStats();
+                addOutput('result', `🌐 Remote call: getPoolStats() - Getting kernel pool statistics`);
+                
+                const stats = kernelManager.getPoolStats();
+                addOutput('stdout', `Pool stats: ${JSON.stringify(stats)}`);
+                
+                return stats;
             }, { __schema__: schemas.getPoolStats }),
             
             // Package installation
             installPackages: Object.assign(async ({ kernelId, packages }, context = null) => {
+                addOutput('result', `🌐 Remote call: installPackages() - Installing packages in kernel ${kernelId.substring(0, 8)}...`);
+                addOutput('stdout', `Packages to install: ${packages.join(', ')}`);
+                
                 const kernel = kernelManager.getKernel(kernelId);
                 if (!kernel) {
+                    addOutput('error', `❌ Kernel ${kernelId.substring(0, 8)}... not found`);
                     throw new Error(`Kernel ${kernelId} not found`);
                 }
                 
@@ -1154,6 +1214,13 @@ print(f"Successfully installed: {', '.join(${JSON.stringify(packages)})}")
                 `;
                 
                 const result = await kernel.kernel.execute(code);
+                
+                if (result.error) {
+                    addOutput('error', `❌ Package installation failed in kernel ${kernelId.substring(0, 8)}...`);
+                } else {
+                    addOutput('result', `✓ Packages installed successfully in kernel ${kernelId.substring(0, 8)}...`);
+                }
+                
                 // Convert Error objects to serializable format for Hypha RPC
                 if (result.error && result.error instanceof Error) {
                     return {
@@ -1170,12 +1237,23 @@ print(f"Successfully installed: {', '.join(${JSON.stringify(packages)})}")
             
             // Startup script support
             runStartupScript: Object.assign(async ({ kernelId, script }, context = null) => {
+                addOutput('result', `🌐 Remote call: runStartupScript() - Running startup script in kernel ${kernelId.substring(0, 8)}...`);
+                addOutput('stdout', `Startup script length: ${script.length} characters`);
+                
                 const kernel = kernelManager.getKernel(kernelId);
                 if (!kernel) {
+                    addOutput('error', `❌ Kernel ${kernelId.substring(0, 8)}... not found`);
                     throw new Error(`Kernel ${kernelId} not found`);
                 }
                 
                 const result = await kernel.kernel.execute(script);
+                
+                if (result.error) {
+                    addOutput('error', `❌ Startup script failed in kernel ${kernelId.substring(0, 8)}...`);
+                } else {
+                    addOutput('result', `✓ Startup script executed successfully in kernel ${kernelId.substring(0, 8)}...`);
+                }
+                
                 // Convert Error objects to serializable format for Hypha RPC
                 const serializedResult = {
                     success: result.success
@@ -1196,8 +1274,12 @@ print(f"Successfully installed: {', '.join(${JSON.stringify(packages)})}")
             
             // Service info
             getServiceInfo: Object.assign(async (context = null) => {
+                addOutput('result', `🌐 Remote call: getServiceInfo() - Getting service information`);
+                
                 const kernels = await kernelManager.listKernels();
                 // The created field is already a string (ISO format), no conversion needed
+                
+                addOutput('stdout', `Service info requested - ${kernels.length} active kernels`);
                 
                 return {
                     name: 'Python Kernel Service',
